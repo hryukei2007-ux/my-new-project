@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>週間 授業課題管理システム</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        .reset-info {
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 13px;
+            margin-bottom: 25px;
+        }
+        .table-container {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            overflow: hidden;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+        th, td {
+            padding: 14px 18px;
+            border-bottom: 1px solid #ddd;
+            font-size: 14px;
+        }
+        th {
+            background-color: #2c3e50;
+            color: #fff;
+            font-weight: 600;
+        }
+        tr:hover {
+            background-color: #f1f4f6;
+        }
+        
+        .status-cell {
+            font-weight: bold;
+            color: #7f8c8d;
+        }
+        .status-done {
+            color: #218c74;
+            font-weight: bold;
+        }
+        .status-wait {
+            color: #c0392b;
+            font-weight: bold;
+        }
+        
+        /* ボタンのスタイル */
+        .btn {
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            transition: all 0.2s;
+            margin-right: 4px;
+        }
+        
+        .btn-submit { 
+            background-color: #2980b9; 
+            color: #ffffff; 
+        }
+        .btn-submit:hover { 
+            background-color: #1f6391; 
+        }
+        .btn-submit.done { 
+            background-color: #7f8c8d; 
+            color: #ffffff; 
+        }
+        .btn-submit:disabled { 
+            background-color: #f2f2f2; 
+            color: #a6a6a6; 
+            border: 1px solid #d3d3d3;
+            cursor: not-allowed; 
+        }
+
+        .btn-toggle { 
+            background-color: #eaeded; 
+            color: #4d5656; 
+            border: 1px solid #bdc3c7;
+        }
+        .btn-toggle.active-yes { 
+            background-color: #e74c3c; 
+            color: #ffffff; 
+            border-color: #c0392b;
+        }
+        .btn-toggle.active-no { 
+            background-color: #7f8c8d; 
+            color: #ffffff; 
+            border-color: #616a6b;
+        }
+        
+        .manual-reset-btn {
+            display: block;
+            margin: 20px auto 0;
+            background-color: #e67e22;
+            color: white;
+        }
+        .manual-reset-btn:hover {
+            background-color: #d35400;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>今週の授業課題管理</h1>
+    <div class="reset-info">※毎週月曜日になると、自動的にすべての課題チェックがリセットされます。</div>
+    
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>科目名</th>
+                    <th>課題有無を選択</th>
+                    <th>現時点の日付 (ボタン押下時)</th>
+                    <th>提出アクション</th>
+                    <th>提出状況</th>
+                    <th>通知（5日後）</th>
+                    <th>通知（6日後）</th>
+                </tr>
+            </thead>
+            <tbody id="table-body"></tbody>
+        </table>
+    </div>
+
+    <button class="btn manual-reset-btn" onclick="forceReset()">手動で今週分をリセットする</button>
+
+    <script>
+        // 曜日情報を内部処理用のみに残し、画面上の列は削除しました
+        const classes = [
+            { name: "英語コミュニケーションⅠ" },
+            { name: "情報工学概論" },
+            { name: "エレクトロニクス工学" },
+            { name: "キャリアデザイン演習基礎" },
+            { name: "地域と社会デザイン" },
+            { name: "ビジネス総論" },
+            { name: "モノづくり総論" },
+            { name: "経済入門" },
+            { name: "実践英語Ⅰ" },
+            { name: "プログラミング言語" },
+            { name: "解析学Ⅰ" },
+            { name: "物理設計基礎" },
+            { name: "コンピューターアーキテクチャ" },
+            { name: "デザインエンジニアリング概論" }
+        ];
+
+        const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
+
+        function getFormattedDateStr(date) {
+            return `${date.getMonth() + 1}/${date.getDate()}(${dayNames[date.getDay()]})`;
+        }
+
+        function checkWeeklyReset() {
+            const lastReset = localStorage.getItem('lastResetDate');
+            const now = new Date();
+            
+            const currentDay = now.getDay();
+            const distanceToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+            const thisMonday = new Date(now);
+            thisMonday.setDate(now.getDate() + distanceToMonday);
+            thisMonday.setHours(0,0,0,0);
+
+            if (!lastReset || new Date(lastReset) < thisMonday) {
+                localStorage.removeItem('taskStates');
+                localStorage.setItem('lastResetDate', now.toISOString());
+            }
+        }
+
+        function saveState(data) {
+            localStorage.setItem('taskStates', JSON.stringify(data));
+        }
+
+        function loadState() {
+            return JSON.parse(localStorage.getItem('taskStates')) || {};
+        }
+
+        const tbody = document.getElementById('table-body');
+        checkWeeklyReset();
+        const savedStates = loadState();
+
+        classes.forEach((cls, index) => {
+            const tr = document.createElement('tr');
+            tr.dataset.index = index;
+            tr.dataset.name = cls.name;
+
+            const state = savedStates[index] || { type: 'なし', status: '-', clickedDate: null };
+            const isYes = state.type === 'あり';
+            const isNo = state.type === 'なし';
+            const isDone = state.status === '済';
+
+            let displayCurrentDate = "-";
+            let str5Days = "-";
+            let str6Days = "-";
+            let iso5 = "";
+            let iso6 = "";
+
+            if (state.clickedDate) {
+                const baseDate = new Date(state.clickedDate);
+                displayCurrentDate = getFormattedDateStr(baseDate);
+
+                const d5 = new Date(baseDate); d5.setDate(baseDate.getDate() + 5);
+                const d6 = new Date(baseDate); d6.setDate(baseDate.getDate() + 6);
+                
+                str5Days = getFormattedDateStr(d5);
+                str6Days = getFormattedDateStr(d6);
+                iso5 = d5.toISOString();
+                iso6 = d6.toISOString();
+            }
+
+            tr.innerHTML = `
+                <td><strong>${cls.name}</strong></td>
+                <td>
+                    <button class="btn btn-toggle ${isYes ? 'active-yes' : ''}" onclick="toggleTask(this, 'あり')">あり</button>
+                    <button class="btn btn-toggle ${isNo ? 'active-no' : ''}" onclick="toggleTask(this, 'なし')">なし</button>
+                </td>
+                <td class="current-date-cell">${displayCurrentDate}</td>
+                <td>
+                    <button class="btn btn-submit" onclick="submitTask(this)" ${isNo ? 'disabled' : ''} class="${isDone ? 'done' : ''}">
+                        ${isDone ? '取消' : '提出する'}
+                    </button>
+                </td>
+                <td class="status-cell">
+                    ${isDone ? '<span class="status-done">済</span>' : (isYes ? '<span class="status-wait">未提出</span>' : '-')}
+                </td>
+                <td class="notif5-cell">
+                    <button class="btn" style="background:#e74c3c; color:white; display:${isYes?'inline-block':'none'}" onclick="downloadNotice('${cls.name}', 5, '${iso5}')">🔔 5日後 (${str5Days})</button>
+                    <span class="no-notif" style="display:${isYes?'none':'inline'}">-</span>
+                </td>
+                <td class="notif6-cell">
+                    <button class="btn" style="background:#f39c12; color:white; display:${isYes?'inline-block':'none'}" onclick="downloadNotice('${cls.name}', 6, '${iso6}')">🔔 6日後 (${str6Days})</button>
+                    <span class="no-notif" style="display:${isYes?'none':'inline'}">-</span>
+                </td>
+            `;
+
+            if (isDone) tr.style.backgroundColor = '#e8f8f5';
+            tbody.appendChild(tr);
+        });
+
+        function toggleTask(btn, type) {
+            const row = btn.closest('tr');
+            const index = row.dataset.index;
+            const className = row.dataset.name;
+            const buttons = row.querySelectorAll('.btn-toggle');
+            const submitBtn = row.querySelector('.btn-submit');
+            const statusCell = row.querySelector('.status-cell');
+            const currentDateCell = row.querySelector('.current-date-cell');
+            
+            const notif5Cell = row.querySelector('.notif5-cell');
+            const notif6Cell = row.querySelector('.notif6-cell');
+
+            buttons.forEach(b => b.classList.remove('active-yes', 'active-no'));
+            const currentStates = loadState();
+
+            if (type === 'あり') {
+                btn.classList.add('active-yes');
+                submitBtn.disabled = false;
+                submitBtn.innerText = '提出する';
+                submitBtn.classList.remove('done');
+                statusCell.innerHTML = '<span class="status-wait">未提出</span>';
+                row.style.backgroundColor = '';
+                
+                const now = new Date();
+                currentDateCell.innerText = getFormattedDateStr(now);
+
+                const d5 = new Date(now); d5.setDate(now.getDate() + 5);
+                const d6 = new Date(now); d6.setDate(now.getDate() + 6);
+
+                notif5Cell.innerHTML = `<button class="btn" style="background:#e74c3c; color:white;" onclick="downloadNotice('${className}', 5, '${d5.toISOString()}')">🔔 5日後 (${getFormattedDateStr(d5)})</button>`;
+                notif6Cell.innerHTML = `<button class="btn" style="background:#f39c12; color:white;" onclick="downloadNotice('${className}', 6, '${d6.toISOString()}')">🔔 6日後 (${getFormattedDateStr(d6)})</button>`;
+
+                currentStates[index] = { type: 'あり', status: '未提出', clickedDate: now.toISOString() };
+            } else {
+                btn.classList.add('active-no');
+                submitBtn.disabled = true;
+                submitBtn.innerText = '提出する';
+                submitBtn.classList.remove('done');
+                statusCell.innerText = '-';
+                currentDateCell.innerText = '-';
+                row.style.backgroundColor = '';
+
+                notif5Cell.innerHTML = '<span class="no-notif">-</span>';
+                notif6Cell.innerHTML = '<span class="no-notif">-</span>';
+
+                currentStates[index] = { type: 'なし', status: '-', clickedDate: null };
+            }
+            saveState(currentStates);
+        }
+
+        function submitTask(button) {
+            const row = button.closest('tr');
+            const index = row.dataset.index;
+            const statusCell = row.querySelector('.status-cell');
+            const currentStates = loadState();
+
+            if (statusCell.innerText === "未提出") {
+                statusCell.innerHTML = '<span class="status-done">済</span>';
+                button.innerText = '取消';
+                button.classList.add('done');
+                row.style.backgroundColor = '#e8f8f5';
+                currentStates[index].status = '済';
+            } else {
+                statusCell.innerHTML = '<span class="status-wait">未提出</span>';
+                button.innerText = '提出する';
+                button.classList.remove('done');
+                row.style.backgroundColor = '';
+                currentStates[index].status = '未提出';
+            }
+            saveState(currentStates);
+        }
+
+        function downloadNotice(className, daysToAdd, dateIsoStr) {
+            const targetDate = new Date(dateIsoStr);
+            const yyyy = targetDate.getFullYear();
+            const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
+            const dd = String(targetDate.getDate()).padStart(2, '0');
+            const dayName = dayNames[targetDate.getDay()];
+
+            const icsContent = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:${yyyy}${mm}${dd}
+SUMMARY:【課題期限】${className}
+DESCRIPTION:ボタンを押した日から${daysToAdd}日後（${dayName}曜日）の課題リマインダーです。
+END:VEVENT
+END:VCALENDAR`;
+
+            const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `ボタン押下から${daysToAdd}日後_${className}.ics`;
+            link.click();
+        }
+
+        function forceReset() {
+            if(confirm("今週のデータをすべてリセットして初期状態に戻しますか？")) {
+                localStorage.removeItem('taskStates');
+                location.reload();
+            }
+        }
+    </script>
+</body>
+</html>
