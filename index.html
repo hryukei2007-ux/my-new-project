@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>週間 授業課題管理システム（グループ共有・曜日自動判別版）</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        .config-container {
+            max-width: 1250px;
+            margin: 0 auto 15px auto;
+            background: #fff;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            border-left: 5px solid #7289da;
+        }
+        .input-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            width: 100%;
+        }
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-grow: 1;
+        }
+        .input-group label {
+            font-weight: bold;
+            font-size: 14px;
+            color: #2c3e50;
+            white-space: nowrap;
+            width: 160px;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 2px solid #bdc3c7;
+            border-radius: 6px;
+            font-size: 13px;
+            transition: border-color 0.2s;
+        }
+        .input-group input:focus {
+            border-color: #7289da;
+            outline: none;
+        }
+        .input-group input.valid {
+            border-color: #218c74;
+            background-color: #f4fbf9;
+        }
+        .reset-info {
+            font-size: 12px;
+            color: #7f8c8d;
+            line-height: 1.4;
+            margin-top: 5px;
+            border-top: 1px dashed #ddd;
+            padding-top: 8px;
+        }
+        .table-container {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            overflow: hidden;
+            max-width: 1250px;
+            margin: 0 auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+        th, td {
+            padding: 14px 18px;
+            border-bottom: 1px solid #ddd;
+            font-size: 14px;
+        }
+        th {
+            background-color: #2c3e50;
+            color: #fff;
+            font-weight: 600;
+        }
+        tr:hover {
+            background-color: #f1f4f6;
+        }
+        
+        .status-cell {
+            font-weight: bold;
+            color: #7f8c8d;
+        }
+        .status-done {
+            color: #218c74;
+            font-weight: bold;
+        }
+        .status-wait {
+            color: #c0392b;
+            font-weight: bold;
+        }
+        
+        .btn {
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            transition: all 0.2s;
+            margin-right: 4px;
+        }
+        
+        .btn-submit { 
+            background-color: #2980b9; 
+            color: #ffffff; 
+        }
+        .btn-submit:hover { 
+            background-color: #1f6391; 
+        }
+        .btn-submit.done { 
+            background-color: #7f8c8d; 
+            color: #ffffff; 
+        }
+        .btn-submit:disabled { 
+            background-color: #f2f2f2; 
+            color: #a6a6a6; 
+            border: 1px solid #d3d3d3;
+            cursor: not-allowed; 
+        }
+
+        .btn-toggle { 
+            background-color: #eaeded; 
+            color: #4d5656; 
+            border: 1px solid #bdc3c7;
+        }
+        .btn-toggle.active-yes { 
+            background-color: #e74c3c; 
+            color: #ffffff; 
+            border-color: #c0392b;
+        }
+        .btn-toggle.active-no { 
+            background-color: #7f8c8d; 
+            color: #ffffff; 
+            border-color: #616a6b;
+        }
+        .btn-toggle:disabled {
+            background-color: #f5f5f5;
+            color: #cccccc;
+            border-color: #e0e0e0;
+            cursor: not-allowed;
+        }
+        
+        .manual-reset-btn {
+            display: block;
+            margin: 20px auto 0;
+            background-color: #e67e22;
+            color: white;
+        }
+        .manual-reset-btn:hover {
+            background-color: #d35400;
+        }
+        .countdown-text {
+            font-family: monospace;
+            font-size: 13px;
+        }
+        .lock-notice {
+            color: #c0392b;
+            font-weight: bold;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>今週の授業課題管理 (各自Discordリマインダー)</h1>
+    
+    <div class="config-container">
+        <div class="input-row">
+            <div class="input-group">
+                <label for="discord-webhook">共通 Webhook URL：</label>
+                <input type="text" id="discord-webhook" value="https://discordapp.com/api/webhooks/1508475807864193046/KkN0H_sHvj2dkKPFQGK28OLL5HHQTdlO8ihRo-XUGvocuZz5jUmCklj_qxLB1aWvTKjH" oninput="validateInputs()">
+            </div>
+        </div>
+        
+        <div class="input-row">
+            <div class="input-group">
+                <label for="discord-user-id">あなたのDiscord数字ID：</label>
+                <input type="text" id="discord-user-id" placeholder="18桁の数字IDを入力してください（例: 1023086149775925289）" oninput="validateInputs()">
+            </div>
+            <span id="lock-msg" class="lock-notice">⚠️ 正しい数字IDを入力すると、下のボタンが使えるようになります</span>
+        </div>
+        
+        <div class="reset-info">
+            <strong>【使い方】</strong><br>
+            ① 自分の「Discord数字ID」を上の欄に入力します。（一度入力すればブラウザが記憶します）<br>
+            ② 課題がある科目の「<strong>あり</strong>」を押すとタイマーが始動します。<br>
+            （💡日曜日なら2日後、金曜日なら5日後など、ボタンを押した曜日から自動で最適な通知時間を計算します！）<br>
+            ③ **通知が送信されると、その科目の状態は来週に備えて自動で個別リセット（初期化）されます。**<br>
+            ※この画面のタブをブラウザのどこかで開いている間だけ、タイマーが作動します。
+        </div>
+    </div>
+    
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>科目名</th>
+                    <th>課題有無を選択</th>
+                    <th>ボタン押下時間</th>
+                    <th>提出アクション</th>
+                    <th>提出状況</th>
+                    <th>課題リマインダー (通知後に自動リセット)</th>
+                </tr>
+            </thead>
+            <tbody id="table-body"></tbody>
+        </table>
+    </div>
+
+    <button class="btn manual-reset-btn" onclick="forceReset()">手動で今週分をリセットする</button>
+
+    <script>
+        const classes = [
+            { name: "英語コミュニケーションⅠ" },
+            { name: "情報工学概論" },
+            { name: "エレクトロニクス工学" },
+            { name: "キャリアデザイン演習基礎" },
+            { name: "地域と社会デザイン" },
+            { name: "ビジネス総論" },
+            { name: "モノづくり総論" },
+            { name: "経済入門" },
+            { name: "実践英語Ⅰ" },
+            { name: "プログラミング言語" },
+            { name: "解析学Ⅰ" },
+            { name: "物理設計基礎" },
+            { name: "コンピューターアーキテクチャ" },
+            { name: "デザインエンジニアリング概論" }
+        ];
+
+        const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
+        let activeTimers = {};
+
+        function getFormattedTimeStr(date) {
+            return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`;
+        }
+
+        function getFormattedDateStr(date) {
+            return `${date.getMonth() + 1}/${date.getDate()}(${dayNames[date.getDay()]})`;
+        }
+
+        // 💡 ボタンを押した時点の「曜日」を勝手に判断して通知ターゲット日数を決める関数
+        function calculateTargetFromNow() {
+            const now = new Date();
+            const currentDay = now.getDay(); // 0: 日, 1: 月, ... 5: 金, 6: 土
+            
+            let daysToAdd = 5; // 基本は5日後
+
+            if (currentDay === 0) {
+                daysToAdd = 2; // 日曜日なら2日後
+            } else if (currentDay === 5) {
+                daysToAdd = 5; // 金曜日なら5日後
+            }
+
+            const target = new Date(now);
+            target.setDate(now.getDate() + daysToAdd);
+            target.setHours(23, 59, 0, 0); // その日の23:59
+            return target;
+        }
+
+        function validateInputs() {
+            const urlInput = document.getElementById('discord-webhook');
+            const idInput = document.getElementById('discord-user-id');
+            const lockMsg = document.getElementById('lock-msg');
+            
+            const url = urlInput.value.trim();
+            const userId = idInput.value.trim();
+            
+            const isValidUrl = url.startsWith('https://discord.com/api/webhooks/') || url.startsWith('https://discordapp.com/api/webhooks/');
+            const isValidId = /^\d{17,19}$/.test(userId);
+
+            if (isValidUrl && isValidId) {
+                localStorage.setItem('userDiscordWebhook', url);
+                localStorage.setItem('userDiscordIndividualID', userId);
+                
+                urlInput.classList.add('valid');
+                idInput.classList.add('valid');
+                
+                lockMsg.innerHTML = "✅ ロック解除！選択可能になりました";
+                lockMsg.style.color = "#218c74";
+                
+                document.querySelectorAll('.btn-toggle').forEach(btn => btn.disabled = false);
+            } else {
+                if(!isValidUrl) urlInput.classList.remove('valid');
+                if(!isValidId) idInput.classList.remove('valid');
+                
+                lockMsg.innerHTML = "⚠️ 正しい18桁の数字IDを入力してください";
+                lockMsg.style.color = "#c0392b";
+                
+                document.querySelectorAll('.btn-toggle').forEach(btn => btn.disabled = true);
+            }
+        }
+
+        function checkWeeklyReset() {
+            const lastReset = localStorage.getItem('lastResetDate');
+            const now = new Date();
+            
+            const currentDay = now.getDay();
+            const distanceToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+            const thisMonday = new Date(now);
+            thisMonday.setDate(now.getDate() + distanceToMonday);
+            thisMonday.setHours(0,0,0,0);
+
+            if (!lastReset || new Date(lastReset) < thisMonday) {
+                localStorage.removeItem('taskStates');
+                localStorage.setItem('lastResetDate', now.toISOString());
+            }
+        }
+
+        function saveState(data) {
+            localStorage.setItem('taskStates', JSON.stringify(data));
+        }
+
+        function loadState() {
+            return JSON.parse(localStorage.getItem('taskStates')) || {};
+        }
+
+        const tbody = document.getElementById('table-body');
+        checkWeeklyReset();
+        const savedStates = loadState();
+
+        classes.forEach((cls, index) => {
+            const tr = document.createElement('tr');
+            tr.dataset.index = index;
+            tr.dataset.name = cls.name;
+
+            const state = savedStates[index] || { type: 'なし', status: '-', clickedDate: null };
+            const isYes = state.type === 'あり';
+            const isNo = state.type === 'なし';
+            const isDone = state.status === '済';
+
+            let displayCurrentTime = "-";
+            let strNotificationTime = "-";
+
+            if (state.clickedDate && state.timerTargetTime) {
+                const baseDate = new Date(state.clickedDate);
+                displayCurrentTime = getFormattedTimeStr(baseDate);
+
+                const targetDate = new Date(state.timerTargetTime);
+                strNotificationTime = `${getFormattedDateStr(targetDate)} 23:59`;
+            }
+
+            tr.innerHTML = `
+                <td><strong>${cls.name}</strong></td>
+                <td>
+                    <button class="btn btn-toggle ${isYes ? 'active-yes' : ''}" onclick="toggleTask(this, 'あり')" disabled>あり</button>
+                    <button class="btn btn-toggle ${isNo ? 'active-no' : ''}" onclick="toggleTask(this, 'なし')" disabled>なし</button>
+                </td>
+                <td class="current-date-cell">${displayCurrentTime}</td>
+                <td>
+                    <button class="btn btn-submit" onclick="submitTask(this)" ${isNo ? 'disabled' : ''} class="${isDone ? 'done' : ''}">
+                        ${isDone ? '取消' : '提出する'}
+                    </button>
+                </td>
+                <td class="status-cell">
+                    ${isDone ? '<span class="status-done">済</span>' : (isYes ? '<span class="status-wait">未提出</span>' : '-')}
+                </td>
+                <td class="notif-real-cell">
+                    <span class="timer-display-real countdown-text" style="color:#e74c3c; font-weight:bold; display:${isYes?'inline':'none'}">⏳ ${strNotificationTime}</span>
+                    <span class="no-notif" style="display:${isYes?'none':'inline'}">-</span>
+                </td>
+            `;
+
+            if (isDone) tr.style.backgroundColor = '#e8f8f5';
+            tbody.appendChild(tr);
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedUrl = localStorage.getItem('userDiscordWebhook');
+            const savedId = localStorage.getItem('userDiscordIndividualID');
+            
+            if (savedUrl) document.getElementById('discord-webhook').value = savedUrl;
+            if (savedId) document.getElementById('discord-user-id').value = savedId;
+            
+            validateInputs();
+
+            classes.forEach((cls, index) => {
+                const tr = document.querySelector(`tr[data-index="${index}"]`);
+                const state = savedStates[index];
+                if (state && state.type === 'あり' && state.status !== '済' && state.timerTargetTime) {
+                    const targetDate = new Date(state.timerTargetTime);
+                    if (targetDate > new Date()) {
+                        startVisualTimer(cls.name, tr, targetDate);
+                    }
+                }
+            });
+        });
+
+        function toggleTask(btn, type) {
+            const row = btn.closest('tr');
+            const index = row.dataset.index;
+            const className = row.dataset.name;
+            const buttons = row.querySelectorAll('.btn-toggle');
+            const submitBtn = row.querySelector('.btn-submit');
+            const statusCell = row.querySelector('.status-cell');
+            const currentDateCell = row.querySelector('.current-date-cell');
+            const realCell = row.querySelector('.notif-real-cell');
+
+            buttons.forEach(b => b.classList.remove('active-yes', 'active-no'));
+            const currentStates = loadState();
+
+            if (activeTimers[index]) {
+                clearInterval(activeTimers[index]);
+                delete activeTimers[index];
+            }
+
+            if (type === 'あり') {
+                btn.classList.add('active-yes');
+                submitBtn.disabled = false;
+                submitBtn.innerText = '提出する';
+                submitBtn.classList.remove('done');
+                statusCell.innerHTML = '<span class="status-wait">未提出</span>';
+                
+                const now = new Date();
+                currentDateCell.innerText = getFormattedTimeStr(now);
+
+                // 💡 ボタンを押した瞬間に曜日を自動判別！
+                const targetDate = calculateTargetFromNow();
+
+                realCell.innerHTML = `<span class="timer-display-real countdown-text" style="color:#e74c3c; font-weight:bold;">⏳ ${getFormattedDateStr(targetDate)} 23:59</span>`;
+
+                startVisualTimer(className, row, targetDate);
+
+                currentStates[index] = { 
+                    type: 'あり', 
+                    status: '未提出', 
+                    clickedDate: now.toISOString(),
+                    timerTargetTime: targetDate.toISOString()
+                };
+            } else {
+                btn.classList.add('active-no');
+                submitBtn.disabled = true;
+                submitBtn.innerText = '提出する';
+                submitBtn.classList.remove('done');
+                statusCell.innerText = '-';
+                currentDateCell.innerText = '-';
+                realCell.innerHTML = '<span class="no-notif">-</span>';
+                row.style.backgroundColor = '';
+
+                currentStates[index] = { type: 'none', status: '-', clickedDate: null, timerTargetTime: null };
+            }
+            saveState(currentStates);
+        }
+
+        function startVisualTimer(className, row, targetDate) {
+            const index = row.dataset.index;
+            const realDisplay = row.querySelector('.timer-display-real');
+
+            if (activeTimers[index]) clearInterval(activeTimers[index]);
+
+            activeTimers[index] = setInterval(() => {
+                const now = new Date();
+                const diffMs = targetDate - now;
+
+                if (diffMs <= 0) {
+                    clearInterval(activeTimers[index]);
+                    delete activeTimers[index];
+                    
+                    sendDiscordNotification(className);
+                    resetRowToDefault(row, index);
+
+                } else {
+                    if (realDisplay) {
+                        const totalSec = Math.floor(diffMs / 1000);
+                        const days = Math.floor(totalSec / 86400);
+                        const hours = Math.floor((totalSec % 86400) / 3600);
+                        const mins = Math.floor((totalSec % 3600) / 60);
+                        realDisplay.innerText = `⏳ あと ${days}日 ${hours}時間 ${mins}分`;
+                    }
+                }
+            }, 1000);
+        }
+
+        function resetRowToDefault(row, index) {
+            const buttons = row.querySelectorAll('.btn-toggle');
+            const submitBtn = row.querySelector('.btn-submit');
+            const statusCell = row.querySelector('.status-cell');
+            const currentDateCell = row.querySelector('.current-date-cell');
+            const realCell = row.querySelector('.notif-real-cell');
+
+            buttons.forEach(b => b.classList.remove('active-yes', 'active-no'));
+            buttons[1].classList.add('active-no'); 
+
+            submitBtn.disabled = true;
+            submitBtn.innerText = '提出する';
+            submitBtn.classList.remove('done');
+            statusCell.innerText = '-';
+            currentDateCell.innerText = '-';
+            realCell.innerHTML = '<span class="no-notif">-</span>';
+            row.style.backgroundColor = '';
+
+            const currentStates = loadState();
+            currentStates[index] = { type: 'none', status: '-', clickedDate: null, timerTargetTime: null };
+            saveState(currentStates);
+        }
+
+        function sendDiscordNotification(className) {
+            const webhookUrl = document.getElementById('discord-webhook').value.trim();
+            const userId = document.getElementById('discord-user-id').value.trim();
+            if (!webhookUrl || !userId) return;
+
+            const requestData = {
+                content: `<@${userId}> ⚠️ **【課題リマインド通知】** ⚠️\n\n「**${className}**」の設定時間になりました！\n出し忘れのないよう、大至急提出を完了させてください！ 📝🔥`
+            };
+
+            fetch(webhookUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(requestData)
+            }).then(() => {
+                console.log(`Discordへの通知送信完了: ${className}`);
+            }).catch((err) => {
+                console.error("Discord送信エラー:", err);
+            });
+        }
+
+        function submitTask(button) {
+            const row = button.closest('tr');
+            const index = row.dataset.index;
+            const statusCell = row.querySelector('.status-cell');
+            const currentStates = loadState();
+
+            if (statusCell.innerText === "未提出") {
+                statusCell.innerHTML = '<span class="status-done">済</span>';
+                button.innerText = '取消';
+                button.classList.add('done');
+                row.style.backgroundColor = '#e8f8f5';
+                currentStates[index].status = '済';
+                
+                if (activeTimers[index]) {
+                    clearInterval(activeTimers[index]);
+                    delete activeTimers[index];
+                }
+                currentStates[index].timerTargetTime = null;
+            } else {
+                statusCell.innerHTML = '<span class="status-wait">未提出</span>';
+                button.innerText = '提出する';
+                button.classList.remove('done');
+                row.style.backgroundColor = '';
+                currentStates[index].status = '未提出';
+                
+                const targetDate = calculateTargetFromNow();
+                if (targetDate > new Date()) {
+                    currentStates[index].timerTargetTime = targetDate.toISOString();
+                    startVisualTimer(row.dataset.name, row, targetDate);
+                }
+            }
+            saveState(currentStates);
+        }
+
+        function forceReset() {
+            if(confirm("データをすべてリセットして初期状態に戻しますか？")) {
+                localStorage.removeItem('taskStates');
+                location.reload();
+            }
+        }
+    </script>
+</body>
+</html>
